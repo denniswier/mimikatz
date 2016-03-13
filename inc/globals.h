@@ -1,7 +1,7 @@
 /*	Benjamin DELPY `gentilkiwi`
 	http://blog.gentilkiwi.com
 	benjamin@gentilkiwi.com
-	Licence : http://creativecommons.org/licenses/by/3.0/fr/
+	Licence : https://creativecommons.org/licenses/by/4.0/
 */
 #pragma once
 #include <ntstatus.h>
@@ -17,8 +17,8 @@
 #include <wchar.h>
 #include "../modules/kull_m_output.h"
 //#define KERBEROS_TOOLS
-//#define DPAPI_TOOLS
 //#define LSASS_DECRYPT
+//#define LSARPDATA
 #define NET_MODULE
 #ifdef _M_X64
 	#define MIMIKATZ_ARCH L"x64"
@@ -27,9 +27,10 @@
 #endif
 
 #define MIMIKATZ				L"mimikatz"
-#define MIMIKATZ_VERSION		L"2.0 alpha"
-#define MIMIKATZ_CODENAME		L"Kiwi en C"
-#define MIMIKATZ_FULL			MIMIKATZ L" " MIMIKATZ_VERSION L" (" MIMIKATZ_ARCH L") release \"" MIMIKATZ_CODENAME L"\" (" TEXT(__DATE__) L" " TEXT(__TIME__) L")"
+#define MIMIKATZ_VERSION		L"2.1"
+#define MIMIKATZ_CODENAME		L"A La Vie, A L\'Amour"
+#define MIMIKATZ_FULL			MIMIKATZ L" " MIMIKATZ_VERSION L" (" MIMIKATZ_ARCH L") built on " TEXT(__DATE__) L" " TEXT(__TIME__)
+#define MIMIKATZ_SECOND			L"\"" MIMIKATZ_CODENAME L"\""
 #define MIMIKATZ_SPECIAL		L"                                "
 #define MIMIKATZ_DEFAULT_LOG	MIMIKATZ L".log"
 #define MIMIKATZ_DRIVER			L"mimidrv"
@@ -65,8 +66,8 @@ DWORD MIMIKATZ_NT_MAJOR_VERSION, MIMIKATZ_NT_MINOR_VERSION, MIMIKATZ_NT_BUILD_NU
 #define MS_ENH_RSA_AES_PROV_XP	L"Microsoft Enhanced RSA and AES Cryptographic Provider (Prototype)"
 #endif
 
-#define RtlEqualLuid(L1, L2) (((L1)->LowPart == (L2)->LowPart) && ((L1)->HighPart == (L2)->HighPart))
 #define RtlEqualGuid(L1, L2) (RtlEqualMemory(L1, L2, sizeof(GUID)))
+
 #define LM_NTLM_HASH_LENGTH	16
 
 #define KULL_M_WIN_BUILD_XP		2600

